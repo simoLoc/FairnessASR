@@ -1,8 +1,9 @@
-from datasets import load_dataset
-from huggingface_hub import login
-from transformers import Wav2Vec2Processor, TFWav2Vec2ForCTC, WhisperProcessor, TFWhisperForConditionalGeneration
-import tensorflow as tf
-import librosa
+import torch
+import torchaudio
+from transformers import (
+    WhisperProcessor, WhisperForConditionalGeneration,
+    Wav2Vec2Processor, Wav2Vec2ForCTC
+)
 import numpy as np
 import pandas as pd
 import os
@@ -11,69 +12,53 @@ from jiwer import wer, cer
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import utils_dataset as utils_dataset
-
-
-# Calcola le metriche di WER (Word Error Rate) e CER (Character Error Rate) tra 
-# la trascrizione di riferimento e quella predetta dal modello 
-def calcola_wer_cer(reference, hypothesis):
-    return wer(reference, hypothesis), cer(reference, hypothesis)
+import utils_fairness as utils_fairness
 
 
 def load_model(model_name):
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if "whisper" in model_name:
         processor = WhisperProcessor.from_pretrained(model_name)
-        model = TFWhisperForConditionalGeneration.from_pretrained(model_name)
+        model = WhisperForConditionalGeneration.from_pretrained(model_name).to(device)
     else:
         processor = Wav2Vec2Processor.from_pretrained(model_name)
-        model = TFWav2Vec2ForCTC.from_pretrained(model_name)
+        model = Wav2Vec2ForCTC.from_pretrained(model_name).to(device)
 
-        # Parametri del processor specifici per Wav2Vec2
-        processor.batch_size = 1
-        processor.truncation = "longest_first"
-        processor.chunk_length_s = 30
-        processor.stride_length_s = (4, 2)
-
-    # TensorFlow rileva automaticamente GPU/CPU
     # Mettiamo il modello in "inference mode"
-    model.trainable = False
+    model.eval()
 
-    return processor, model
+    return processor, model, device
 
 
-def get_transcription(audio_array, sampling_rate, processor, model, model_name):
+def get_transcription(audio_array, sampling_rate, processor, model, model_name, device):
 
     if sampling_rate != 16000:
-        audio_array = librosa.resample(audio_array.astype(float),
-                                       orig_sr=sampling_rate,
-                                       target_sr=16000)
-        
+        resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=16000)
+        audio_array = resampler(torch.tensor(audio_array, dtype=torch.float32)).numpy()
+
     if "whisper" in model_name:
         inputs = processor(audio_array, sampling_rate=16000, return_tensors="pt")
-        input_features = inputs["input_features"]
+        input_features = inputs["input_features"].to(device)
 
-        generated_ids = model.generate(input_features)
-        transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-
+        with torch.no_grad():
+            generated_ids = model.generate(input_features)
+            transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
     else:
-        inputs = processor(
-            audio_array,
-            sampling_rate=16000,
-            return_tensors="tf",
-            padding="longest"
-        )
+        inputs = processor(audio_array, sampling_rate=16000, return_tensors="pt", padding="longest")
+        input_values = inputs.input_values.to(device)
 
-        outputs = model(inputs.input_values, training=False)
-        
-        logits = outputs.logits
-        predicted_ids = tf.argmax(logits, axis=-1)
-        
+        with torch.no_grad():
+            logits = model(input_values).logits
+
+        predicted_ids = torch.argmax(logits, dim=-1)
         transcription = processor.batch_decode(predicted_ids)[0]
-        
+
     return transcription
 
 
-def evaluate_by_group(dataset, processor, model, group_name, model_name):
+def evaluate_by_group(dataset, processor, model, group_name, model_name, device):
     wer_list = []
     cer_list = []
 
@@ -84,14 +69,14 @@ def evaluate_by_group(dataset, processor, model, group_name, model_name):
         try:
             audio = sample["audio"]
             transcription_ref = sample["transcription"].lower()
-            transcription_pred = get_transcription(audio["array"], audio["sampling_rate"], processor, model, model_name)
+            transcription_pred = get_transcription(audio["array"], audio["sampling_rate"], processor, model, model_name, device)
             
             transcription_pred = transcription_pred.lower()
 
             # print(f"True Campione {i+1}/{len(dataset)}: {transcription_ref}")
             # print(f"Predetto Campione {i+1}/{len(dataset)}: {transcription_pred}")
 
-            w, c = calcola_wer_cer(transcription_ref, transcription_pred)
+            w, c = utils_fairness.calcola_wer_cer(transcription_ref, transcription_pred)
             wer_list.append(w)
             cer_list.append(c)
         except Exception as e:
@@ -108,53 +93,11 @@ def evaluate_by_group(dataset, processor, model, group_name, model_name):
     }
 
 
-
-def plot_metrics(results, title_prefix, category, model):
-    # Crea la cartella plots se non esiste
-    os.makedirs(f"plots/{model}", exist_ok=True)
-
-    sample_step = 100
-
-    # --- Plot di WER ---
-    plt.figure(figsize=(10, 6))
-    for r in results:
-        group = r["Group"]
-        wer_values = r["WER List"][::sample_step]
-        x = np.arange(len(wer_values))
-        plt.plot(x, wer_values, marker='o', linestyle='-', label=group)
-    plt.title(f"{title_prefix} - Word Error Rate (WER)")
-    plt.xlabel(f"Campione (ogni {sample_step})")
-    plt.ylabel("WER")
-    plt.xticks(rotation=20)
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"plots/{model}/{category.lower()}_wer.png")
-    plt.close()
-
-    # --- Plot di CER ---
-    plt.figure(figsize=(10, 6))
-    for r in results:
-        group = r["Group"]
-        cer_values = r["CER List"][::sample_step]
-        x = np.arange(len(cer_values))
-        plt.plot(x, cer_values, marker='s', linestyle='-', label=group)
-    plt.title(f"{title_prefix} - Character Error Rate (CER)")
-    plt.xlabel(f"Campione (ogni {sample_step})")
-    plt.ylabel("CER")
-    plt.xticks(rotation=20)
-    plt.grid(True)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f"plots/{model}/{category.lower()}_cer.png")
-    plt.close()
-
-
-def get_results_by_category(dataset, processor, model, category, model_name):
+def get_results_by_category(dataset, processor, model, category, model_name, device):
     
     if category == "overall":
         # Valutazione complessiva del dataset
-        return [evaluate_by_group(dataset, processor, model, "Overall")]
+        return [evaluate_by_group(dataset, processor, model, "Overall", model_name, device)]
 
     elif category == "gender":
         # Divisione dei campioni in base al genere
@@ -162,46 +105,53 @@ def get_results_by_category(dataset, processor, model, category, model_name):
         women = dataset.filter(lambda x: x["women"] == 1 and x["men"] == 0)
 
         results = []
-        results.append(evaluate_by_group(men, processor, model, "Men", model_name))
-        results.append(evaluate_by_group(women, processor, model, "Women", model_name))
+        results.append(evaluate_by_group(men, processor, model, "Men", model_name, device))
+        results.append(evaluate_by_group(women, processor, model, "Women", model_name, device))
+
     elif category == "dialect":
         # Divisione dei campioni in base ai dialetti
-        aave = dataset.filter(lambda x: x["aave"] == 1 and x["sae"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0)
-        sae = dataset.filter(lambda x: x["sae"] == 1 and x["aave"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0)
-        spanglish = dataset.filter(lambda x: x["spanglish"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["chicano_english"] == 0)
-        chicano = dataset.filter(lambda x: x["chicano_english"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["spanglish"] == 0)
-        others = dataset.filter(lambda x: x["aave"] == 0 and x["sae"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0 and x["other_dialect_accent"] == 1)
+        aave = dataset.filter(lambda x: x["aave"] == 1)
+        sae = dataset.filter(lambda x: x["sae"] == 1)
+        spanglish = dataset.filter(lambda x: x["spanglish"] == 1)
+        chicano = dataset.filter(lambda x: x["chicano_english"] == 1)
+        others = dataset.filter(lambda x: x["other_dialect_accent"] == 1)
 
         results = []
-        results.append(evaluate_by_group(aave, processor, model, "African American Vernacular English (AAVE)", model_name))
-        results.append(evaluate_by_group(sae, processor, model, "Standard American English (SAE)", model_name))
-        results.append(evaluate_by_group(spanglish, processor, model, "Spanglish", model_name))
-        results.append(evaluate_by_group(chicano, processor, model, "Chicano English", model_name))
-        results.append(evaluate_by_group(others, processor, model, "Other Dialects", model_name))
+        results.append(evaluate_by_group(aave, processor, model, "African American Vernacular English (AAVE)", model_name, device))
+        results.append(evaluate_by_group(sae, processor, model, "Standard American English (SAE)", model_name, device))
+        results.append(evaluate_by_group(spanglish, processor, model, "Spanglish", model_name, device))
+        results.append(evaluate_by_group(chicano, processor, model, "Chicano English", model_name, device))
+        results.append(evaluate_by_group(others, processor, model, "Other Dialects", model_name, device))
 
     elif category == "gender_dialect":
         # Divisione dei campioni in base a dialetto e genere
-        aave_men = dataset.filter(lambda x: x["aave"] == 1 and x["men"] == 1 and x["sae"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0 and x["women"] == 0)
-        aave_women = dataset.filter(lambda x: x["aave"] == 1 and x["women"] == 1 and x["sae"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0 and x["men"] == 0)
+        aave_men = dataset.filter(lambda x: x["aave"] == 1 and x["men"] == 1 and x["women"] == 0)
+        aave_women = dataset.filter(lambda x: x["aave"] == 1 and x["women"] == 1 and x["men"] == 0)
 
-        sae_men = dataset.filter(lambda x: x["sae"] == 1 and x["men"] == 1 and x["aave"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0 and x["women"] == 0)
-        sae_women = dataset.filter(lambda x: x["sae"] == 1 and x["women"] == 1 and x["aave"] == 0 and x["spanglish"] == 0 and x["chicano_english"] == 0 and x["men"] == 0)
+        sae_men = dataset.filter(lambda x: x["sae"] == 1 and x["men"] == 1 and x["women"] == 0)
+        sae_women = dataset.filter(lambda x: x["sae"] == 1 and x["women"] == 1 and x["men"] == 0)
 
-        spanglish_men = dataset.filter(lambda x: x["spanglish"] == 1 and x["men"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["chicano_english"] == 0 and x["women"] == 0)
-        spanglish_women = dataset.filter(lambda x: x["spanglish"] == 1 and x["women"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["chicano_english"] == 0 and x["men"] == 0)
+        spanglish_men = dataset.filter(lambda x: x["spanglish"] == 1 and x["men"] == 1 and x["women"] == 0)
+        spanglish_women = dataset.filter(lambda x: x["spanglish"] == 1 and x["women"] == 1 and x["men"] == 0)
 
-        chicano_men = dataset.filter(lambda x: x["chicano_english"] == 1 and x["men"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["spanglish"] == 0 and x["women"] == 0)
-        chicano_women = dataset.filter(lambda x: x["chicano_english"] == 1 and x["women"] == 1 and x["aave"] == 0 and x["sae"] == 0 and x["spanglish"] == 0 and x["men"] == 0)
+        chicano_men = dataset.filter(lambda x: x["chicano_english"] == 1 and x["men"] == 1 and x["women"] == 0)
+        chicano_women = dataset.filter(lambda x: x["chicano_english"] == 1 and x["women"] == 1 and x["men"] == 0)
+
+        other_men = dataset.filter(lambda x: x["other_dialect_accent"] == 1 and x["men"] == 1 and x["women"] == 0)
+        other_women = dataset.filter(lambda x: x["other_dialect_accent"] == 1 and x["women"] == 1 and x["men"] == 0)
+
 
         results = []
-        results.append(evaluate_by_group(aave_men, processor, model, "AAVE Men", model_name))
-        results.append(evaluate_by_group(aave_women, processor, model, "AAVE Women", model_name))
-        results.append(evaluate_by_group(sae_men, processor, model, "SAE Man", model_name))
-        results.append(evaluate_by_group(sae_women, processor, model, "SAE Women", model_name))
-        results.append(evaluate_by_group(spanglish_men, processor, model, "Spanglish Men", model_name))
-        results.append(evaluate_by_group(spanglish_women, processor, model, "Spanglish Women", model_name))
-        results.append(evaluate_by_group(chicano_men, processor, model, "Chicano English Men", model_name))
-        results.append(evaluate_by_group(chicano_women, processor, model, "Chicano English Women", model_name))
+        results.append(evaluate_by_group(aave_men, processor, model, "AAVE Men", model_name, device))
+        results.append(evaluate_by_group(aave_women, processor, model, "AAVE Women", model_name, device))
+        results.append(evaluate_by_group(sae_men, processor, model, "SAE Man", model_name, device))
+        results.append(evaluate_by_group(sae_women, processor, model, "SAE Women", model_name, device))
+        results.append(evaluate_by_group(spanglish_men, processor, model, "Spanglish Men", model_name, device))
+        results.append(evaluate_by_group(spanglish_women, processor, model, "Spanglish Women", model_name, device))
+        results.append(evaluate_by_group(chicano_men, processor, model, "Chicano English Men", model_name, device))
+        results.append(evaluate_by_group(chicano_women, processor, model, "Chicano English Women", model_name, device))
+        results.append(evaluate_by_group(other_men, processor, model, "Other Dialects Men", model_name, device))
+        results.append(evaluate_by_group(other_women, processor, model, "Other Dialects Women", model_name, device))
 
     return results
 
@@ -211,37 +161,30 @@ def main():
     model_list = ["facebook/wav2vec2-base-960h", 
                   "openai/whisper-medium"]
 
-    # Numero massimo di campioni da valutare per ogni gruppo considerato
-    # num_samples_max = 10  
-
     # Caricamento del dataset
     data = utils_dataset.get_dataset()
     
     for model_name in model_list:
         print(f"\nCaricamento del modello: {model_name}")
-        processor, model = load_model(model_name)
+        processor, model, device = load_model(model_name)
 
         # Crea una cartella per ogni modello se non esiste
         model_dir = model_name.split("/")[-1]
-        os.makedirs(f"results/{model_dir}", exist_ok=True)
         
         categories = ["overall", "gender", "dialect", "gender_dialect"]
 
         for category in categories:
-            results = get_results_by_category(data, processor, model, category, model_dir)
+            results = get_results_by_category(data, processor, model, category, model_dir, device)
 
             df = pd.DataFrame(results)
             df = df[["Group", "Samples", "WER Mean", "CER Mean"]]
         
             print(f"\nRisultati per {category}:")
             print(df.to_string(index=False))
+            
+            utils_fairness.save_results(results, model_dir, category)
 
-            # Salva il dizionario results in un file txt formattato
-            txt_path = f"results/{model_dir}/{category}_results.txt"
-            with open(txt_path, "w") as f:
-                json.dump(results, f, indent=4)
-
-            plot_metrics(results, f"Valutazione per {category}", category, model_dir)
+            utils_fairness.plot_metrics(results, f"Valutazione per {category}", category, model_dir)
 
 
 if __name__ == "__main__":
