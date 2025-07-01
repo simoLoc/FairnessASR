@@ -1,8 +1,5 @@
 from datasets import load_dataset
 from huggingface_hub import login
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-import torch
-import torchaudio
 
 def get_dataset():
     # Login to Hugging Face Hub
@@ -10,9 +7,7 @@ def get_dataset():
 
     # Load the dataset
     ds = load_dataset("SALT-NLP/spotify_podcast_ASR")
-
     data = ds['train']
-
 
     return data
 
