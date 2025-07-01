@@ -13,6 +13,7 @@ def get_dataset():
 
     data = ds['train']
 
+
     return data
 
 
@@ -25,5 +26,3 @@ def print_dataset_info(data):
     for i in range(3):
         print(f"\nEsempio {i+1}:")
         print(data[i])    
-
-
