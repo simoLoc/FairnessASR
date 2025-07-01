@@ -5,6 +5,7 @@ import librosa
 from datasets import load_dataset
 import pickle
 from tqdm import tqdm
+from utils_rnn import text_to_sequence
 
 
 # === audio -> MFCC (input RNN) ===
@@ -27,22 +28,6 @@ def extract_mfcc(audio_array, sampling_rate, n_mfcc=13):
     )
     return mfcc.T  # (timesteps, features)
 
-# === testo -> indici caratteri --> ENCODING ===
-def text_to_sequence(text, char2idx):
-    """
-        Funzione che da un testo estrai i caratteri e gli associa il rispettivo id.
-        Funzione di encoding.
-    """
-    text = text.lower()
-    return [char2idx[c] for c in text if c in char2idx]
-
-# === indici di caratteri -> testo --> DECODING ===
-def sequence_to_text(seq, idx2char):
-    """
-        Funzione che dagli indici di caratteri estre il testo.
-        Funzione di decoding.
-    """
-    return ''.join([idx2char.get(i, '') for i in seq if i != 0])
 
 
 def pad_data(X_list, y_list):
