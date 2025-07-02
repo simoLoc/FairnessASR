@@ -108,7 +108,7 @@ def ctc_lambda_func(args):
 # Loss function chiamata per evitare il lambda serialization warning
 # Da usare in model.compile() come loss function al posto di loss = lambda y_true, y_pred: y_pred
 def ctc_loss_fn(y_true, y_pred):
-    return y_pred[0]
+    return y_pred
 
 def ctc_logits_fn(y_pred):
     """
