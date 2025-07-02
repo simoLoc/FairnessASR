@@ -17,6 +17,8 @@ def train_rnn(X_train, y_train, X_val, y_val, epochs, param_grid, callback_list,
                 for batch_size in param_grid['batch_size']:
                     for learning_rate in param_grid['learning_rate']:
 
+                        print(f"dropout_rate = {dropout_rate}, n_units = {n_units}, n_layers = {n_layers}, batch_size = {batch_size}, learning_rate = {learning_rate}")
+
                         # definizione modello
                         if model == "lstm":
                             model = lstm_rnn(input_dim=mfcc_features, output_dim=vocab_size, 
@@ -90,7 +92,7 @@ if __name__ == "__main__":
         'dropout_rate': [0.0, 0.2, 0.5],
         'n_units': [64, 128],
         'n_layers': [1, 2, 3],
-        'batch_size': [64, 128],
+        'batch_size': [32, 64],
         'learning_rate': [0.001, 0.01]
     }
 
