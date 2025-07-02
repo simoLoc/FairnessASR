@@ -131,7 +131,7 @@ def build_ctc_model(rnn_builder, input_dim, output_dim, dropout, n_layers, n_uni
     return Model(inputs=[feats, labels, input_len, label_len], outputs=[loss_out, logits], name="CTC_Model")
 
 
-def plot_loss(history, dir=""):
+def plot_loss(history, model="", dir=""):
     # Training vs Validation Loss
     plt.figure()
     plt.plot(history['loss'], marker='o', label='Training Loss')
