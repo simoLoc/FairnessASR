@@ -1,4 +1,5 @@
 import keras
+from matplotlib import pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.models import Model
@@ -127,6 +128,21 @@ def build_ctc_model(rnn_builder, input_dim, output_dim, dropout, n_layers, n_uni
     loss_out = Lambda(ctc_lambda_func, output_shape=(1,), name="ctc")([logits, labels, input_len, label_len])
 
     return Model(inputs=[feats, labels, input_len, label_len], outputs=[loss_out, logits], name="CTC_Model")
+
+
+def plot_loss(history):
+    # Training vs Evaluation Loss
+    plt.figure()
+    plt.plot(history['loss'], marker='o', label='Training Loss')
+    plt.plot(history['val_loss'], marker='o', label='Validation Loss')
+    plt.title('Training vs Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('training_vs_validation_loss.png')
+    # plt.show()
 
 
 # def CTC_loss(y_true, y_pred):
