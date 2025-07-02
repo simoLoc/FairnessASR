@@ -13,47 +13,6 @@ def calcola_wer_cer(reference, hypothesis):
     return wer(reference, hypothesis), cer(reference, hypothesis)
 
 
-# # Funzione per il plot delle metriche WER e CER per categoria considerata e modello utilizzato
-# def plot_metrics(results, title_prefix, category, model):
-#     # Crea la cartella plots se non esiste
-#     os.makedirs(f"plots/{model}", exist_ok=True)
-
-#     sample_step = 1
-
-#     # --- Plot di WER ---
-#     plt.figure(figsize=(10, 6))
-#     for r in results:
-#         group = r["Group"]
-#         wer_values = r["WER List"][::sample_step]
-#         x = np.arange(len(wer_values))
-#         plt.plot(x, wer_values, marker='o', linestyle='-', label=group)
-#     plt.title(f"{title_prefix} - Word Error Rate (WER)")
-#     plt.xlabel(f"Campione (ogni {sample_step})")
-#     plt.ylabel("WER")
-#     plt.xticks(rotation=20)
-#     plt.grid(True)
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.savefig(f"plots/{model}/{category.lower()}_wer.png")
-#     plt.close()
-
-#     # --- Plot di CER ---
-#     plt.figure(figsize=(10, 6))
-#     for r in results:
-#         group = r["Group"]
-#         cer_values = r["CER List"][::sample_step]
-#         x = np.arange(len(cer_values))
-#         plt.plot(x, cer_values, marker='s', linestyle='-', label=group)
-#     plt.title(f"{title_prefix} - Character Error Rate (CER)")
-#     plt.xlabel(f"Campione (ogni {sample_step})")
-#     plt.ylabel("CER")
-#     plt.xticks(rotation=20)
-#     plt.grid(True)
-#     plt.legend()
-#     plt.tight_layout()
-#     plt.savefig(f"plots/{model}/{category.lower()}_cer.png")
-#     plt.close()
-
 def plot_metrics(results, title_prefix, category, model):
     os.makedirs(f"plots/{model}", exist_ok=True)
 
