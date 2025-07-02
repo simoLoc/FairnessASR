@@ -8,7 +8,6 @@ import pickle
 
 
 
-
 # === Funzione di training ===
 def train_rnn(X_train, y_train, X_val, y_val,
               epochs, param_grid, callback_list, rnn_type="lstm"):
@@ -46,6 +45,7 @@ def train_rnn(X_train, y_train, X_val, y_val,
                         model.compile(
                             optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                             loss=ctc_loss_fn,
+                            loss_weights=[1.0, 0.0],  # solo la loss 'ctc', ignora logits
                             metrics=["accuracy"]
                         )
 
