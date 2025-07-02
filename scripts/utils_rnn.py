@@ -131,7 +131,7 @@ def build_ctc_model(rnn_builder, input_dim, output_dim, dropout, n_layers, n_uni
 
 
 def plot_loss(history):
-    # Training vs Evaluation Loss
+    # Training vs Validation Loss
     plt.figure()
     plt.plot(history['loss'], marker='o', label='Training Loss')
     plt.plot(history['val_loss'], marker='o', label='Validation Loss')
@@ -143,6 +143,21 @@ def plot_loss(history):
     plt.tight_layout()
     plt.savefig('training_vs_validation_loss.png')
     # plt.show()
+
+def plot_accuracy(history):
+    # Training vs Validation Loss
+    plt.figure()
+    plt.plot(history['accuracy'], marker='o', label='Training Accuracy')
+    plt.plot(history['val_accuracy'], marker='o', label='Validation Accuracy')
+    plt.title('Training vs Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('training_vs_validation_accuracy.png')
+    # plt.show()
+
 
 
 # def CTC_loss(y_true, y_pred):
