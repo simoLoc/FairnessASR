@@ -21,3 +21,8 @@ def print_dataset_info(data):
     for i in range(3):
         print(f"\nEsempio {i+1}:")
         print(data[i])    
+
+
+if __name__ == "__main__":
+    data = get_dataset()
+    print_dataset_info(data)
