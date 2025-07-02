@@ -1,84 +1,49 @@
+import pickle
 import keras
+import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 from utils_rnn import *
-import numpy as np
-import pickle
 
-
-
-
-
-# === Funzione di training ===
-def train_rnn(X_train, y_train, X_val, y_val,
-              epochs, param_grid, callback_list, rnn_type="lstm"):
+def train_rnn(X_train, y_train, X_val, y_val, epochs, param_grid, callback_list, model=""):
     all_history = []
     best_score = 0
     best_run = None
-
-    # Pre-computa lunghezze costanti per tutto il dataset
-    batch_train = X_train.shape[0]
-    batch_val   = X_val.shape[0]
-    input_length_train = np.ones((batch_train, 1), dtype=np.int32) * X_train.shape[1]
-    label_length_train = np.ones((batch_train, 1), dtype=np.int32) * y_train.shape[1]
-    input_length_val   = np.ones((batch_val, 1), dtype=np.int32) * X_val.shape[1]
-    label_length_val   = np.ones((batch_val, 1), dtype=np.int32) * y_val.shape[1]
 
     for dropout_rate in param_grid['dropout_rate']:
         for n_units in param_grid['n_units']:
             for n_layers in param_grid['n_layers']:
                 for batch_size in param_grid['batch_size']:
                     for learning_rate in param_grid['learning_rate']:
-                        print(f"dropout={dropout_rate}, units={n_units}, layers={n_layers}, bs={batch_size}, lr={learning_rate}")
-                        # Costruisci il modello CTC
-                        builder = lstm_rnn if rnn_type=="lstm" else gru_rnn
-                        model = build_ctc_model(
-                            rnn_builder=builder,
-                            input_dim=X_train.shape[2],
-                            output_dim=y_train.max()+1,
-                            dropout=dropout_rate,
-                            n_layers=n_layers,
-                            n_units=n_units
-                        )
 
-                        model.summary()
+                        print(f"dropout_rate = {dropout_rate}, n_units = {n_units}, n_layers = {n_layers}, batch_size = {batch_size}, learning_rate = {learning_rate}")
 
+                        # definizione modello
+                        if model == "lstm":
+                            model = lstm_rnn(input_dim=spectrogram_features, output_dim=vocab_size, 
+                                            dropout=dropout_rate, n_layers=n_layers, n_units=n_units)
+                        else:
+                            model = gru_rnn(input_dim=spectrogram_features, output_dim=vocab_size, 
+                                            dropout=dropout_rate, n_layers=n_layers, n_units=n_units)
                         model.compile(
-                            optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                            loss=ctc_loss_fn,
+                            optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate), 
+                            loss=CTC_loss,
                             metrics=["accuracy"]
                         )
 
-                        # Dummy y per .fit()
-                        dummy_y_train = np.zeros((batch_train,))
-                        dummy_y_val = np.zeros((batch_val,))
-
-                        history = model.fit(
-                            x={
-                                'input_spectrogram': X_train,
-                                'labels': y_train,
-                                'input_length': input_length_train,
-                                'label_length': label_length_train
-                            },
-                            y=dummy_y_train,
-                            validation_data=(
-                                {
-                                    'input_spectrogram': X_val,
-                                    'labels': y_val,
-                                    'input_length': input_length_val,
-                                    'label_length': label_length_val
-                                },
-                                dummy_y_val
-                            ),
-                            batch_size=batch_size,
+                        # Train
+                        history = model.fit(X_train, y_train,
                             epochs=epochs,
-                            callbacks=callback_list,
-                            verbose=1
+                            batch_size=batch_size,
+                            validation_data=(X_val, y_val),
+                            callbacks=callback_list
                         )
-
+                        
                         # Miglior accuracy di validazione per la configurazione
                         max_val_acc = max(history.history['val_accuracy'])
 
+                        # Salvatagio dell'history della configurazione
                         run = {
                             'dropout_rate': dropout_rate,
                             'n_units': n_units,
@@ -95,10 +60,13 @@ def train_rnn(X_train, y_train, X_val, y_val,
                             best_score = max_val_acc
                             best_run = run
 
+
     return all_history, best_run, best_score
 
 
+
 if __name__ == "__main__":
+    
     # Apertura dataset preprocessing
     dataset_train = np.load("dataset_split/asr_train.npz")
     X_train = dataset_train['X']
@@ -112,9 +80,8 @@ if __name__ == "__main__":
 
     print(f"Training set shape: {X_train.shape}")
     print(f"Training labels shape: {y_train.shape}")
-    print(f"Validation set shape: {X_val.shape}")
-    print(f"Validation labels shape: {y_val.shape}")
 
+    # Apertura dizionari per il decoding
     with open("dataset_split/char2idx.pkl", "rb") as f:
         char2idx = pickle.load(f)
 
@@ -133,31 +100,26 @@ if __name__ == "__main__":
         'batch_size': [32, 64],
         'learning_rate': [0.001, 0.01]
     }
+
     epochs = 2
 
-    # Esegui training LSTM
+    # LSTM 
     lstm_callbacks_list = [
         keras.callbacks.ModelCheckpoint('lstm_tensorboard/checkpoint_model.keras', monitor='val_loss', save_best_only=True),
         keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=5),
         keras.callbacks.TensorBoard(log_dir="/lstm_tensorboard")
     ]
-    lstm_all_history, lstm_best_run, lstm_best_score = train_rnn(
-        X_train, y_train, X_val, y_val,
-        epochs, param_grid, lstm_callbacks_list, rnn_type="lstm"
-    )
+    lstm_all_history, lstm_best_run, lstm_best_score = train_rnn(X_train, y_train, X_val, y_val, epochs, param_grid, lstm_callbacks_list, model="lstm")
     lstm_model = lstm_best_run['model']
     plot_model(lstm_model, to_file="lstm_tensorboard/plot_model.png", show_shapes=True)
 
-
-    # Esegui training GRU
+    # GRU
     gru_callbacks_list = [
         keras.callbacks.ModelCheckpoint('gru_tensorboard/checkpoint_model.keras', monitor='val_loss', save_best_only=True),
         keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=5),
         keras.callbacks.TensorBoard(log_dir="/gru_tensorboard")
     ]
-    gru_hist, gru_best, gru_score = train_rnn(
-        X_train, y_train, X_val, y_val,
-        epochs, param_grid, gru_callbacks_list, rnn_type="gru"
-    )
-    gru_model = gru_best['model']
+    gru_all_history, gru_best_run, gru_best_score = train_rnn(X_train, y_train, X_val, y_val, epochs, param_grid, gru_callbacks_list, model="gru")
+    gru_model = gru_best_run['model']
     plot_model(gru_model, to_file="gru_tensorboard/plot_model.png", show_shapes=True)
+    

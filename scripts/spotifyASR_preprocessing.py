@@ -30,6 +30,33 @@ def extract_mfcc(audio_array, sampling_rate, n_mfcc=13):
     )
     return mfcc.T  # (timesteps, features)
 
+def extract_spectrogram(audio_array, sampling_rate):
+
+    # Parametri per STFT
+    frame_length = 256
+    frame_step = 160
+    fft_length = 384
+
+    audio_array = np.array(audio_array, dtype=np.float32)
+    
+    if sampling_rate != 16000:
+        audio_tensor = librosa.resample(audio_array.astype(float),
+                                       orig_sr=sampling_rate,
+                                       target_sr=16000, dtype=tf.float32)
+    else:
+        audio_tensor = tf.convert_to_tensor(audio_array, dtype=tf.float32)
+
+    spectrogram = tf.signal.stft(
+        audio_tensor, frame_length=frame_length, frame_step=frame_step, fft_length=fft_length
+    )
+    spectrogram = tf.abs(spectrogram)
+    spectrogram = tf.math.pow(spectrogram, 0.5)
+
+    means = tf.math.reduce_mean(spectrogram, 1, keepdims=True)
+    stddevs = tf.math.reduce_std(spectrogram, 1, keepdims=True)
+    spectrogram = (spectrogram - means) / (stddevs + 1e-10)
+
+    return spectrogram
 
 
 def pad_data(X_list, y_list):
@@ -155,7 +182,7 @@ def plot_binary_split(name, train_arr, val_arr, test_arr, class_labels):
     fig, ax = plt.subplots(1, 3, figsize=(15,4), sharey=True)
     for i, split in enumerate(['Train','Val','Test']):
         ax[i].bar(class_labels, counts[split])
-        ax[i].set_title(f"{split} – {name}")
+        ax[i].set_title(f"{split} - {name}")
         ax[i].set_ylabel("Numero di esempi" if i==0 else "")
         ax[i].tick_params(axis='x', rotation=45)
     plt.tight_layout()
@@ -180,7 +207,7 @@ def plot_multiclass_split(name, train_arrs, val_arrs, test_arrs, class_labels):
     fig, ax = plt.subplots(1, 3, figsize=(18,4), sharey=True)
     for i, split in enumerate(['Train','Val','Test']):
         ax[i].bar(class_labels, counts[split])
-        ax[i].set_title(f"{split} – {name}")
+        ax[i].set_title(f"{split} - {name}")
         ax[i].set_ylabel("Numero di esempi" if i==0 else "")
         ax[i].tick_params(axis='x', rotation=45)
     plt.tight_layout()
@@ -221,11 +248,11 @@ if __name__ == "__main__":
         text = entry['transcription']
 
         # Estrazione delle feature
-        mfcc = extract_mfcc(audio, sr)  # shape: (T, 13)
+        spectrogram = extract_spectrogram(audio, sr)  # shape: (T, 13)
         # Creazione della label
         label = text_to_sequence(text, char2idx)  # lista di interi
 
-        X.append(mfcc)
+        X.append(spectrogram)
         y.append(label)
         # --- Genere ---
         woman.append(entry['women'])
@@ -269,8 +296,8 @@ if __name__ == "__main__":
     # --- DIALETTI ---
     # lista di array binari per ogni dialetto (1 se appartiene)
     train_dialects = [sae_train, aave_train, chicano_english_train, spanglish_train, other_dialect_accent_train]
-    val_dialects   = [sae_val,   aave_val,   chicano_english_val,   spanglish_val,   other_dialect_accent_val]
-    test_dialects  = [sae_test,  aave_test,  chicano_english_test,  spanglish_test,  other_dialect_accent_test]
+    val_dialects   = [sae_val, aave_val, chicano_english_val, spanglish_val, other_dialect_accent_val]
+    test_dialects  = [sae_test, aave_test, chicano_english_test, spanglish_test, other_dialect_accent_test]
 
     plot_multiclass_split(
         name="Dialetto",
