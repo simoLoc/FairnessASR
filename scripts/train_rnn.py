@@ -4,6 +4,7 @@ from tensorflow.keras.utils import plot_model
 from utils_rnn import *
 import numpy as np
 import pickle
+import copy
 
 
 
@@ -14,6 +15,7 @@ def train_rnn(X_train, y_train, X_val, y_val,
     all_history = []
     best_score = 0
     best_run = None
+    best_model = None
 
     # Pre-computa lunghezze costanti per tutto il dataset
     batch_train = X_train.shape[0]
@@ -86,16 +88,16 @@ def train_rnn(X_train, y_train, X_val, y_val,
                             'batch_size': batch_size,
                             'learning_rate': learning_rate,
                             'max_val_acc': max_val_acc,
-                            'history': history.history,
-                            'model': model
+                            'history': history.history
                         }
                         all_history.append(run)
 
                         if max_val_acc > best_score:
                             best_score = max_val_acc
-                            best_run = run
+                            best_run = copy.copy(run)
+                            best_model = copy.copy(model)
 
-    return all_history, best_run, best_score
+    return all_history, best_run, best_score, best_model
 
 
 if __name__ == "__main__":
@@ -135,29 +137,36 @@ if __name__ == "__main__":
     }
     epochs = 2
 
+    print("=== Esecuzione LSTM ===")
     # Esegui training LSTM
     lstm_callbacks_list = [
         keras.callbacks.ModelCheckpoint('lstm_tensorboard/checkpoint_model.keras', monitor='val_loss', save_best_only=True),
         keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=5),
         keras.callbacks.TensorBoard(log_dir="/lstm_tensorboard")
     ]
-    lstm_all_history, lstm_best_run, lstm_best_score = train_rnn(
+    lstm_all_history, lstm_best_run, lstm_best_score, lstm_best_model = train_rnn(
         X_train, y_train, X_val, y_val,
         epochs, param_grid, lstm_callbacks_list, rnn_type="lstm"
     )
-    lstm_model = lstm_best_run['model']
-    plot_model(lstm_model, to_file="lstm_tensorboard/plot_model.png", show_shapes=True)
+    lstm_best_model.save("lstm_tensorboard/lstm_best_model.keras")
+    plot_model(lstm_best_model, to_file="lstm_tensorboard/plot_model.png", show_shapes=True)
+    plot_accuracy(lstm_best_run['history'], model="LSTM", dir = "lstm_tensorboard")
+    plot_loss(lstm_best_run['history'], model="LSTM", dir = "lstm_tensorboard")
+    save_best_run(lstm_best_run, dir="lstm_tensorboard")
 
-
+    print("=== Esecuzione GRU ===")
     # Esegui training GRU
     gru_callbacks_list = [
         keras.callbacks.ModelCheckpoint('gru_tensorboard/checkpoint_model.keras', monitor='val_loss', save_best_only=True),
         keras.callbacks.EarlyStopping(monitor='val_accuracy', patience=5),
         keras.callbacks.TensorBoard(log_dir="/gru_tensorboard")
     ]
-    gru_hist, gru_best, gru_score = train_rnn(
+    gru_hist, gru_best_run, gru_score, gru_best_model = train_rnn(
         X_train, y_train, X_val, y_val,
         epochs, param_grid, gru_callbacks_list, rnn_type="gru"
     )
-    gru_model = gru_best['model']
-    plot_model(gru_model, to_file="gru_tensorboard/plot_model.png", show_shapes=True)
+    gru_best_model.save("gru_tensorboard/gru_best_model.keras")
+    plot_model(gru_best_model, to_file="gru_tensorboard/plot_model.png", show_shapes=True)
+    plot_accuracy(gru_best_run['history'], model="GRU", dir = "gru_tensorboard")
+    plot_loss(gru_best_run['history'], model="GRU", dir = "gru_tensorboard")
+    save_best_run(gru_best_run, dir="gru_tensorboard")

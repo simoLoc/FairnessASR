@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.models import Model
+import json
 
 # === testo -> indici caratteri --> ENCODING ===
 def text_to_sequence(text, char2idx):
@@ -130,35 +131,37 @@ def build_ctc_model(rnn_builder, input_dim, output_dim, dropout, n_layers, n_uni
     return Model(inputs=[feats, labels, input_len, label_len], outputs=[loss_out, logits], name="CTC_Model")
 
 
-def plot_loss(history):
+def plot_loss(history, dir=""):
     # Training vs Validation Loss
     plt.figure()
     plt.plot(history['loss'], marker='o', label='Training Loss')
     plt.plot(history['val_loss'], marker='o', label='Validation Loss')
-    plt.title('Training vs Validation Loss')
+    plt.title(f'{model} - Training vs Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('training_vs_validation_loss.png')
+    plt.savefig(f'{dir}/training_vs_validation_loss.png')
     # plt.show()
 
-def plot_accuracy(history):
+def plot_accuracy(history, model="", dir=""):
     # Training vs Validation Loss
     plt.figure()
     plt.plot(history['accuracy'], marker='o', label='Training Accuracy')
     plt.plot(history['val_accuracy'], marker='o', label='Validation Accuracy')
-    plt.title('Training vs Validation Accuracy')
+    plt.title(f'{model} - Training vs Validation Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig('training_vs_validation_accuracy.png')
+    plt.savefig(f'{dir}/training_vs_validation_accuracy.png')
     # plt.show()
 
-
+def save_best_run(best_run, dir=""):
+    with open(f"{dir}/best_run.txt", "w") as f:
+        json.dump(best_run, f, indent=4)
 
 # def CTC_loss(y_true, y_pred):
 #     """
