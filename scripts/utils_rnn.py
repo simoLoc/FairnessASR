@@ -115,8 +115,7 @@ def ctc_logits_fn(y_pred):
     """
     Funzione per estrarre i logits dal modello CTC, applicando la softmax.
     """
-    logits = tf.nn.softmax(y_pred[1], axis=-1)
-
+    logits = tf.nn.softmax(y_pred['logits'], axis=-1)
     return logits
 
 
@@ -128,7 +127,7 @@ def build_ctc_model(rnn_builder, input_dim, output_dim, dropout, n_layers, n_uni
     label_len = Input(name="label_length", shape=(1,), dtype="int32")
     loss_out = Lambda(ctc_lambda_func, output_shape=(1,), name="ctc")([logits, labels, input_len, label_len])
 
-    return Model(inputs=[feats, labels, input_len, label_len], outputs=[loss_out, logits], name="CTC_Model")
+    return Model(inputs=[feats, labels, input_len, label_len], outputs={"ctc": loss_out, "logits": logits}, name="CTC_Model")
 
 
 def plot_loss(history, model="", dir=""):

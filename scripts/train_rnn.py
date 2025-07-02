@@ -7,8 +7,6 @@ import pickle
 import copy
 
 
-
-
 # === Funzione di training ===
 def train_rnn(X_train, y_train, X_val, y_val,
               epochs, param_grid, callback_list, rnn_type="lstm"):
@@ -30,13 +28,13 @@ def train_rnn(X_train, y_train, X_val, y_val,
             for n_layers in param_grid['n_layers']:
                 for batch_size in param_grid['batch_size']:
                     for learning_rate in param_grid['learning_rate']:
-                        print(f"dropout={dropout_rate}, units={n_units}, layers={n_layers}, bs={batch_size}, lr={learning_rate}")
+                        print(f"dropout={dropout_rate}, units={n_units}, layers={n_layers}, batch_size={batch_size}, learning_rate={learning_rate}")
                         # Costruisci il modello CTC
                         builder = lstm_rnn if rnn_type=="lstm" else gru_rnn
                         model = build_ctc_model(
                             rnn_builder=builder,
                             input_dim=X_train.shape[2],
-                            output_dim=y_train.max()+1,
+                            output_dim=vocab_size,
                             dropout=dropout_rate,
                             n_layers=n_layers,
                             n_units=n_units
@@ -46,14 +44,15 @@ def train_rnn(X_train, y_train, X_val, y_val,
 
                         model.compile(
                             optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
-                            loss=ctc_loss_fn,
-                            loss_weights=[1.0, 0.0],  # solo la loss 'ctc', ignora logits
-                            metrics=["accuracy"]
+                            loss={'ctc': ctc_loss_fn, 'logits': None}
                         )
 
                         # Dummy y per .fit()
                         dummy_y_train = np.zeros((batch_train,))
                         dummy_y_val = np.zeros((batch_val,))
+
+                        # dummy_y_train = {'ctc': np.zeros((batch_train,)), 'logits': None}
+                        # dummy_y_val = {'ctc': np.zeros((batch_val,)), 'logits': None}
 
                         history = model.fit(
                             x={
@@ -111,6 +110,14 @@ if __name__ == "__main__":
     dataset_test = np.load("dataset_split/asr_test.npz")
     X_test = dataset_test['X']
     y_test = dataset_test['y']
+
+    # Dataset di training
+    train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+    # Dataset di validazione
+    val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val))
+    # Dataset di test
+    test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
 
     print(f"Training set shape: {X_train.shape}")
     print(f"Training labels shape: {y_train.shape}")
