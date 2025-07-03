@@ -158,18 +158,58 @@ def train_rnn(X_train, y_train, X_val, y_val, epochs, param_grid,
     return all_history, best_run, best_score, best_model
 
 
+def get_evaluate_results(group_dict, X_test, y_test, best_model, best_run):
+    
+    results_evaluation = []
+
+    for category, subgroups in group_dict.items():
+        
+        for subgroup_name, mask in subgroups.items():
+            # Estrai i sample per la sottocategoria
+
+            X_sub = X_test[mask]
+            y_sub = y_test[mask]
+            input_length_sub = np.ones((X_sub.shape[0], 1), dtype=np.int32) * X_sub.shape[1]
+            label_length_sub = np.ones((X_sub.shape[0], 1), dtype=np.int32) * y_sub.shape[1]
+
+            # Costruisci y_test_all per questa sottocategoria
+            y_sub_all = np.concatenate([
+                y_sub,
+                label_length_sub,
+                input_length_sub
+            ], axis=1)
+
+            # Valutazione
+            loss, wer, cer = best_model.evaluate(
+                x=X_sub,
+                y=y_sub_all,
+                batch_size=best_run['batch_size']
+            )
+
+            print(f"{subgroup_name}: Loss={loss:.4f}, WER={wer:.4f}, CER={cer:.4f}")
+            results_evaluation.append({
+                "Category": category,
+                "Group": subgroup_name,
+                "Loss": loss,
+                "WER": wer,
+                "CER": cer
+            })
+
+    return results_evaluation
+
+
 
 def main_rnn():
     # Apertura dataset preprocessing
     dataset_train = np.load("dataset_split/asr_train.npz")
-    X_train = dataset_train['X'][:64]  
-    y_train = dataset_train['y'][:64]
+    X_train = dataset_train['X']  
+    y_train = dataset_train['y']
     dataset_val = np.load("dataset_split/asr_val.npz")
-    X_val = dataset_val['X'][:32]
-    y_val = dataset_val['y'][:32]
+    X_val = dataset_val['X']
+    y_val = dataset_val['y']
     dataset_test = np.load("dataset_split/asr_test.npz")
-    X_test = dataset_test['X'][:32]
-    y_test = dataset_test['y'][:32]
+    X_test = dataset_test['X']
+    y_test = dataset_test['y']
 
 
     # Pre-computa lunghezze costanti per tutto il dataset
@@ -196,17 +236,31 @@ def main_rnn():
     chicano_test = dataset_test['chicano_english']
     others_test = dataset_test['other_dialect_accent']
 
+    # Forziamo tali dataset con astype(bool) in quanto sono booleani, ma contengono valori float
+    # (0.0 e 1.0), quindi per utilizzarli come mask dobbiamo forzare il tipo
     group_dict = {
         "Gender": {
-            "Men": men_test,
-            "Women": women_test
+            "Men": men_test.astype(bool),
+            "Women": women_test.astype(bool)
         },
         "Dialect": {
-            "AAVE": aave_test,
-            "SAE": sae_test,
-            "Spanglish": spanglish_test,
-            "Chicano English": chicano_test,
-            "Other Dialects": others_test
+            "AAVE": aave_test.astype(bool),
+            "SAE": sae_test.astype(bool),
+            "Spanglish": spanglish_test.astype(bool),
+            "Chicano English": chicano_test.astype(bool),
+            "Other Dialects": others_test.astype(bool)
+        },
+        "Gender and Dialect": {
+            "AAVE Men": np.logical_and(men_test, aave_test).astype(bool),
+            "AAVE Women": np.logical_and(women_test, aave_test).astype(bool),
+            "SAE Men": np.logical_and(men_test, sae_test).astype(bool),
+            "SAE Women": np.logical_and(women_test, sae_test).astype(bool),
+            "Spanglish Men": np.logical_and(men_test, spanglish_test).astype(bool),
+            "Spanglish Women": np.logical_and(women_test, spanglish_test).astype(bool),
+            "Chicano English Men": np.logical_and(men_test, chicano_test).astype(bool),
+            "Chicano English Women": np.logical_and(women_test, chicano_test).astype(bool),
+            "Other Dialects Men": np.logical_and(men_test, others_test).astype(bool),
+            "Other Dialects Women": np.logical_and(women_test, others_test).astype(bool)
         }
     }
 
@@ -221,24 +275,16 @@ def main_rnn():
     fft_length = 384  # definito in preprocessing
     spectrogram_features = fft_length // 2 + 1
 
-    # param_grid = {
-    #     'dropout_rate': [0.0, 0.2, 0.5],
-    #     'n_units': [64, 128],
-    #     'n_layers': [1, 2, 3],
-    #     'batch_size': [32, 64],
-    #     'learning_rate': [0.001, 0.01]
-    # }
-
     param_grid = {
-        'dropout_rate': [0.2],
-        'n_units': [64],
-        'n_layers': [1],
-        'batch_size': [32],
-        'learning_rate': [0.001]
+        'dropout_rate': [0.2, 0.5],
+        'n_units': [64, 128],
+        'n_layers': [1, 2, 3],
+        'batch_size': [32, 64],
+        'learning_rate': [0.001, 0.01]
     }
 
-    # epochs = 30
-    epochs = 1
+    epochs = 30
+    
 
     print("=== Train LSTM ===")
     # Esegui training LSTM
@@ -265,14 +311,17 @@ def main_rnn():
     ], axis=1)
 
     # === Evaluation LSTM ===
-    print("=== Evaluation LSTM ===")
-    lstm_loss, lstm_wer, lstm_cer = lstm_best_model.evaluate(
-        x=X_test,
-        y=y_test_all, 
-        batch_size = lstm_best_run['batch_size']
-    )
+    lstm_results_evaluation = get_evaluate_results(group_dict, X_test, y_test, lstm_best_model, lstm_best_run)
+    save_evaluation_results(lstm_results_evaluation, "lstm")
 
-    print(f"Risultati LSTM\n\nLoss: {lstm_loss}\nWER: {lstm_wer}\nCER: {lstm_cer}")
+    # print("=== Evaluation LSTM ===")
+    # lstm_loss, lstm_wer, lstm_cer = lstm_best_model.evaluate(
+    #     x=X_test,
+    #     y=y_test_all, 
+    #     batch_size = lstm_best_run['batch_size']
+    # )
+
+    # print(f"Risultati LSTM\n\nLoss: {lstm_loss}\nWER: {lstm_wer}\nCER: {lstm_cer}")
 
     print("=== Train GRU ===")
     # Esegui training GRU
@@ -293,36 +342,8 @@ def main_rnn():
     save_best_run(gru_best_run, dir="gru_tensorboard")
 
     # === Evaluation GRU ===
-    print("=== Evaluation GRU ===")
-    gru_loss, gru_wer, gru_cer = gru_best_model.evaluate(
-        x=X_test,
-        y=y_test_all, 
-        batch_size = gru_best_run['batch_size']
-    )
-
-    print(f"Risultati GRU\n\nLoss: {gru_loss}\nWER: {gru_wer}\nCER: {gru_cer}")
-
-
-    # results_wer_lstm = evaluate_by_group(lstm_best_model, X_test, y_test, group_dict, idx2char)
-
-    # for category, subgroups in results_wer_lstm.items():
-    #     print(f"\n Categoria: {category}")
-    # for name, score in subgroups.items():
-    #     if score is None:
-    #         print(f" {name}: nessun campione")
-    #     else:
-    #         print(f" {name}: WER = {score:.4f}")
-
-    # results_wer_gru = evaluate_by_group(gru_best_model, X_test, y_test, group_dict, idx2char)
-
-    # for category, subgroups in results_wer_gru.items():
-    #     print(f"\n Categoria: {category}")
-    # for name, score in subgroups.items():
-    #     if score is None:
-    #         print(f" {name}: nessun campione")
-    #     else:
-    #         print(f" {name}: WER = {score:.4f}")
-
+    gru_results_evaluation = get_evaluate_results(group_dict, X_test, y_test, gru_best_model, gru_best_run)
+    save_evaluation_results(gru_results_evaluation, "gru")
 
 
 if __name__ == "__main__":

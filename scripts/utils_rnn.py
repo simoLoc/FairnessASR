@@ -7,6 +7,7 @@ from tensorflow.keras.metrics import Metric
 from jiwer import wer, cer
 import numpy as np
 import json
+import os
 
 # === testo -> indici caratteri --> ENCODING ===
 def text_to_sequence(text, char2idx):
@@ -305,3 +306,14 @@ def plot_cer(history, model="", dir=""):
 def save_best_run(best_run, dir=""):
     with open(f"{dir}/best_run.txt", "w") as f:
         json.dump(best_run, f, indent=4)
+
+
+def save_evaluation_results(results, model_name):
+
+    # Crea la cartella results se non esiste
+    os.makedirs(f"{model_name}_tensorboard", exist_ok=True)        
+
+    # Salva il dizionario results in un file txt formattato
+    txt_path = f"{model_name}_tensorboard/evaluation_results.txt"
+    with open(txt_path, "w") as f:
+        json.dump(results, f, indent=4)
