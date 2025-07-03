@@ -145,17 +145,17 @@ def plot_loss(history, model="", dir=""):
     # plt.show()
 
 def plot_accuracy(history, model="", dir=""):
-    # Training vs Validation Loss
+    # Training vs Validation WER
     plt.figure()
-    plt.plot(history['accuracy'], marker='o', label='Training Accuracy')
-    plt.plot(history['val_accuracy'], marker='o', label='Validation Accuracy')
-    plt.title(f'{model} - Training vs Validation Accuracy')
+    plt.plot(history['accuracy'], marker='o', label='Training WER')
+    plt.plot(history['val_accuracy'], marker='o', label='Validation WER')
+    plt.title(f'{model} - Training vs Validation WER')
     plt.xlabel('Epoch')
-    plt.ylabel('Loss')
+    plt.ylabel('WER')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f'{dir}/training_vs_validation_accuracy.png')
+    plt.savefig(f'{dir}/training_vs_validation_wer.png')
     # plt.show()
 
 def save_best_run(best_run, dir=""):
