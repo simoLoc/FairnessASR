@@ -155,7 +155,7 @@ def get_results_by_category(dataset, processor, model, category, model_name, dev
 
     return results
 
-def main():
+def main_asr_model_hf():
 
     # I due modelli utilizzati sono Wav2Vec2 Base e Whisper Medium 
     model_list = ["facebook/wav2vec2-base-960h", 
@@ -188,4 +188,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main_asr_model_hf()
