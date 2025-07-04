@@ -312,16 +312,25 @@ def main_rnn():
 
     # === Evaluation LSTM ===
     lstm_results_evaluation = get_evaluate_results(group_dict, X_test, y_test, lstm_best_model, lstm_best_run)
+
+    # Evaluation overall
+    print("=== Evaluation LSTM ===")
+    lstm_loss, lstm_wer, lstm_cer = lstm_best_model.evaluate(
+        x=X_test,
+        y=y_test_all, 
+        batch_size = lstm_best_run['batch_size']
+    )
+
+    lstm_results_evaluation.append({
+        "Category": "Overall",
+        "Loss": lstm_loss,
+        "WER": lstm_wer,
+        "CER": lstm_cer
+    })
+
+
     save_evaluation_results(lstm_results_evaluation, "lstm")
 
-    # print("=== Evaluation LSTM ===")
-    # lstm_loss, lstm_wer, lstm_cer = lstm_best_model.evaluate(
-    #     x=X_test,
-    #     y=y_test_all, 
-    #     batch_size = lstm_best_run['batch_size']
-    # )
-
-    # print(f"Risultati LSTM\n\nLoss: {lstm_loss}\nWER: {lstm_wer}\nCER: {lstm_cer}")
 
     print("=== Train GRU ===")
     # Esegui training GRU
@@ -343,6 +352,22 @@ def main_rnn():
 
     # === Evaluation GRU ===
     gru_results_evaluation = get_evaluate_results(group_dict, X_test, y_test, gru_best_model, gru_best_run)
+
+    # Evaluation overall
+    print("=== Evaluation LSTM ===")
+    gru_loss, gru_wer, gru_cer = lstm_best_model.evaluate(
+        x=X_test,
+        y=y_test_all, 
+        batch_size = gru_best_run['batch_size']
+    )
+
+    gru_results_evaluation.append({
+        "Category": "Overall",
+        "Loss": gru_loss,
+        "WER": gru_wer,
+        "CER": gru_cer
+    })
+    
     save_evaluation_results(gru_results_evaluation, "gru")
 
 
