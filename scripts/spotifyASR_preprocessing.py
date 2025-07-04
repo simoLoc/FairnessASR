@@ -216,7 +216,7 @@ def plot_multiclass_split(name, train_arrs, val_arrs, test_arrs, class_labels):
 
 
 
-if __name__ == "__main__":
+def main_preprocessing():
     # Creazione della directory per il preprocessing del dataset
     os.makedirs("dataset_split", exist_ok=True)
 
@@ -329,3 +329,7 @@ if __name__ == "__main__":
 
     with open("dataset_split/idx2char.pkl", "wb") as f:
         pickle.dump(idx2char, f)
+
+
+if __name__ == "__main__":
+    main_preprocessing()
