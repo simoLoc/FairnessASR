@@ -184,7 +184,6 @@ class WERMetric(Metric):
         idx2char = {int(k): v for k, v in idx2char_str.items()}
         return cls(idx2char=idx2char, **config)
 
-
 @keras.saving.register_keras_serializable()
 class CERMetric(Metric):
     def __init__(self, idx2char, name='cer', **kwargs):
