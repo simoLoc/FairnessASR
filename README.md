@@ -21,15 +21,19 @@ i generi, anche se le voci femminili tendono a ottenere risultati leggermente mi
 [`spotify_podcast_ASR`](https://huggingface.co/datasets/SALT-NLP/spotify_podcast_ASR), disponibile sulla piattaforma HuggingFace.
 
 Per utilizzarlo è necessario importarlo nel seguente modo
-<pre> ```from datasets import load_dataset
-         ds = load_dataset("SALT-NLP/spotify_podcast_ASR")``` </pre>
+```
+   from datasets import load_dataset
+   ds = load_dataset("SALT-NLP/spotify_podcast_ASR")
+```
 
 ## Struttura della pipeline
 <img width="3840" height="957" alt="DL_pipeline (2)" src="https://github.com/user-attachments/assets/8763eee4-9d89-49cc-b934-cf83cef0cfed" />
 
 ## Requisiti
 L'esecuzione del progetto richiede l'installazione delle dipendenze, da eseguirsi tramite il comando
-<pre> ```pip install -r requirements.txt ``` </pre>
+```
+   pip install -r requirements.txt
+```
 
 ## Autori e Contatti
 | Autore              | Indirizzo email                |
