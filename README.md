@@ -1,7 +1,7 @@
 # FairnessASR
 
 FairnessASR è un progetto di ricerca che analizza l'equità nei sistemi di riconoscimento automatico del parlato (ASR), con particolare attenzione alle potenziali disparità nelle 
-performance dei modelli rispetto al **genere** e al **dialetto** degli speaker. L'obiettivo principale è valutare se e in che misura i modelli ASR presentano **bias sistematici**,
+performance dei modelli rispetto al genere e al dialetto degli speaker. L'obiettivo principale è valutare se e in che misura i modelli ASR presentano bias sistematici,
 penalizzando alcune categorie di parlanti nella trascrizione automatica. Il progetto mira a contribuire allo sviluppo di sistemi più equi e rappresentativi dal punto di vista 
 sociolinguistico.
 
